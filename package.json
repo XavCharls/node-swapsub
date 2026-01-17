@@ -1,0 +1,13 @@
+{
+  "name": "node-swapsub",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "swap.js",
+  "scripts": {
+    "start": "node swap.js"
+  },
+  "author": "XavCharls",
+  "devDependencies": {
+    "lossless-json": "^4.3.0"
+  }
+}
