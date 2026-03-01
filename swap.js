@@ -62,18 +62,24 @@ async function index() {
     let outputFolder = process.argv[4] || destFolder
 
     if (!originFolder) {
-        // console.log("Como usar el script")
-        // console.log("1. Pasar como parametro la carpeta o el archivo")
-        // console.log("   ej. node subs.js \"series/One Punch Man/Season 1\"")
-        // console.log("   ej. node subs.js \"series/One Punch Man/Season 1/1x01.mkv\"")
-        // console.log("El script debe estar en una carpeta superior a todas las series")
-        // console.log("Se marcaran todos los subtitulos como por defecto 0 excepto:")
-        // console.log("   Si tiene subtitulos en castillian se marca como 1");
-        // console.log("   Si no tiene castillian pero tiene spanish se marca como 1")
-        // console.log("   Si no tiene ningun subtitulo spa se marca el primero como 1")
-        // console.log("Soporta rutas absolutas")
+        console.log("Como usar el script")
+        console.log("El script admite 3 parametros: origen, destino y carpeta de salida (opcional)")
+        console.log("   1. la carpeta o el archivo origen del que se quieren copiar los subtitulos")
+        console.log("   2. la carpeta o el archivo destino al que se le quieren copiar los subtitulos")
+        console.log("   3. la carpeta de salida donde se guardarán los archivos modificados (opcional, por defecto se sobrescribe el destino)")
+        console.log(`${colors.fgYellow}   ej. node swap.js 'series/One Punch Man/Season 1 esp' 'series/One Punch Man/Season 1 ingles'${colors.reset}`)
+        console.log(`${colors.fgYellow}   ej. node swap.js 'series/One Punch Man/Season 1 esp' 'series/One Punch Man/Season 1 ingles' 'series/One Punch Man/Season 1'${colors.reset}`)
+        console.log("El script te da a elegir de la lista de subtitulos del primer archivo origen cual quieres copiar")
+        console.log("y te da la opcion de mantener o no los otros subtitulos del destino")
+        console.log("Si hay diferentes subtitulos en los siguientes archivos se intentara hacer match por idioma con el subtitulo elegido del primer archivo");
+        console.log("pero si no se encuentra un match se saltara ese archivo, lo mejor en este caso es dejar acabar el script y luego volver a ejecutarlo")
+        console.log("con los archivos que quedaron sin subtitulos para elegir otro subtitulo de referencia que si tenga match en los otros archivos")
+        rl.close()
         return
     }
+
+    //crear la carpeta en el destino si no existe
+    await promiseExec(`mkdir -p '${outputFolder}'`);
 
     let originFiles = await getFiles(originFolder)
     let destFiles = await getFiles(destFolder)
@@ -131,6 +137,7 @@ async function getFiles(dir) {
 async function swapSubs(originFiles, destFiles, outputFolder) {
     if (originFiles.length !== destFiles.length) {
         console.error("La cantidad de archivos origen y destino no coincide");
+        rl.close()
         return false;
     }
 
@@ -139,8 +146,8 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
 
     try {
         for (let i = 0; i < originFiles.length; i++) {
-            const originFile = originFiles[i];
-            const destFile   = destFiles[i];
+            const originFile = originFiles[i].replaceAll(/(?<!\\)"/g, '\\"');
+            const destFile   = destFiles[i].replaceAll(/(?<!\\)"/g, '\\"');
 
             console.log(`\nProcesando:\nOrigen: ${originFile}\nDestino: ${destFile}\nOutput: ${outputFolder}\n`);
 
