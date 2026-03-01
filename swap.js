@@ -8,6 +8,7 @@ import { resolve } from 'path';
 import fs from 'fs';
 const readdir = promisify(fs.readdir);
 const stat = promisify(fs.stat);
+const promiseExec = promisify(exec);
 import readline from 'node:readline';
 
 const rl = readline.createInterface({
@@ -125,52 +126,111 @@ async function getFiles(dir) {
  * @param   {Array}    destFiles    Lista de archivos destino a los que se les quieren copiar los subtitulos
  * @returns {Boolean}   Resultado de la ejecucion
  */
-function swapSubs(originFiles, destFiles) {
-    if (originFiles.length != destFiles.length) {
-        console.error("La cantidad de archivos origen y destino no coincide")
-        return false
+async function swapSubs(originFiles, destFiles) {
+    if (originFiles.length !== destFiles.length) {
+        console.error("La cantidad de archivos origen y destino no coincide");
+        return false;
     }
 
-    for (let i = 0; i < originFiles.length; i++) {
-        let originFile = originFiles[i]
-        let destFile = destFiles[i]
+    let keepOtherSubsFlag = null;
+    let referenceSubTrack = null;
 
-        exec(`mkvmerge -J "${originFile}"`, {maxBuffer: undefined}, async (error, stdout, stderr) => {
-            if (error) {
-                console.error(`error: ${error.message}`)
-                return false
+    try {
+        for (let i = 0; i < originFiles.length; i++) {
+            const originFile = originFiles[i];
+            const destFile   = destFiles[i];
+
+            console.log(`\nProcesando:\nOrigen: ${originFile}\nDestino: ${destFile}\n`);
+
+            // Obtener info del origen
+            const { stdout: originJson } = await promiseExec(
+                `mkvmerge -J "${originFile}"`,
+                { maxBuffer: 1024 * 1024 * 10 }
+            );
+
+            const originData = parse(originJson);
+            const subtitleTracks = originData.tracks.filter(t => t.type === "subtitles");
+
+            if (!subtitleTracks.length) {
+                console.log("No hay subtítulos en el archivo origen. Saltando...");
+                continue;
             }
 
-            if (stderr) {
-                console.error(`stderr: ${stderr}`)
-                return false
+            // Mostrar opciones solo la primera vez
+            if (!referenceSubTrack) {
+                const options = subtitleTracks.map(t =>
+                    `${t.id}: ${t.properties.language || "und"} (${t.properties.language_ietf || "N/A"}) (${t.properties.track_name || "N/A"})`
+                ).join("\n");
+
+                let selectedId;
+                do {
+                    selectedId = await prompt(`${options}\nElige ID del subtítulo a transferir: `);
+                } while (!subtitleTracks.some(t => String(t.id) === selectedId));
+
+                referenceSubTrack = subtitleTracks.find(t => String(t.id) === selectedId);
+            } else {
+                // Buscar mismo idioma en siguientes archivos
+                const match = subtitleTracks.find(t =>
+                    t.properties.language === referenceSubTrack.properties.language &&
+                    t.properties.language_ietf === referenceSubTrack.properties.language_ietf
+                );
+
+                if (!match) {
+                    console.log("No se encontró subtítulo equivalente en este archivo. Saltando...");
+                    continue;
+                }
+
+                referenceSubTrack = match;
             }
 
-            let mkvData         = parse(stdout)
-            let subtitleTracks  = mkvData.tracks.filter(e => e.type == 'subtitles')
-            let subtitleOptions = subtitleTracks.map(e => `${colors.bright}${(e.properties.language == 'spa' && (e.properties.language_ietf == 'es' || e.properties.language_ietf == 'es-ES')) ? colors.fgGreen : colors.fgMagenta}${e.id}${colors.reset}: ${e.properties.language} (${e.properties.language_ietf})`)
-            let selectedSubId, keepOtherSubs;
-            do {
-                selectedSubId = await prompt(`${subtitleOptions.join('\n')}\n${colors.fgBlue}Elige que subtitulos transferir: ${colors.reset}`)
-            } while (isInvalidPrompt(selectedSubId, subtitleTracks.map(e => Number(e.id).toString())));
+            // Preguntar solo una vez si mantener otros subtítulos
+            if (keepOtherSubsFlag === null) {
+                let answer;
+                do {
+                    answer = await prompt("¿Mantener otros subtítulos del destino? (y/n): ");
+                } while (!["y", "n"].includes(answer));
 
-            do {
-                keepOtherSubs = await prompt(`${colors.fgBlue}Mantener el resto de subtitulos? (y/n): ${colors.reset}`)
-            } while (isInvalidPrompt(keepOtherSubs, ['y', 'n']));
+                keepOtherSubsFlag = answer === "y";
+            }
 
-            rl.close()
-            // console.log(`Transfiriendo subtitulos de ${originFile} a ${destFile}`)
+            // Construir comando mkvmerge
+            const tempFile = `${destFile}.tmp.mkv`
 
-            subtitleTracks.filter(e => e.properties.id == 5).forEach(e => {
-                // run(`mkvextract "${originFile}" tracks ${e.properties.id}:subtitle.srt`)
-                // commands.push(`mkvpropedit "${destFile}" --add-track "${originFile}":${e.properties.uid.value}`)
-            })
+            let command = `mkvmerge -o "${tempFile}" `
 
-            // run(null, commands, destFile.replace(import.meta.dirname + '/', ''))
-        });
+            // Del destino: mantener todo excepto subtítulos si el usuario dijo que no
+            if (!keepOtherSubsFlag) {
+                command += `--no-subtitles `
+            }
+
+            command += `"${destFile}" `
+
+            // Del origen: solo el subtítulo seleccionado
+            command += `--no-audio --no-video --no-attachments --no-chapters `
+            command += `--subtitle-tracks ${referenceSubTrack.id} --default-track ${referenceSubTrack.id}:yes `
+            command += `"${originFile}"`
+
+            console.log("Ejecutando:", command);
+
+            await promiseExec(command, { maxBuffer: 1024 * 1024 * 10 });
+
+            // Reemplazar archivo original
+            await promiseExec(`mv "${tempFile}" "${destFile}"`);
+
+            console.log("Subtítulo transferido correctamente");
+        }
+
+        rl.close();
+        return true;
+
+    } catch (error) {
+        console.error("STDERR:");
+        console.error(error.stderr?.toString());
+        console.error("ERROR:");
+        console.error(error.message);
+        rl.close();
+        return false;
     }
-
-    return true
 }
 
 function isInvalidPrompt(input, validOptions) {
