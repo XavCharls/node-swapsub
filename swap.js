@@ -59,6 +59,7 @@ index()
 async function index() {
     let originFolder = process.argv[2]
     let destFolder = process.argv[3]
+    let outputFolder = process.argv[4] || destFolder
 
     if (!originFolder) {
         // console.log("Como usar el script")
@@ -78,7 +79,7 @@ async function index() {
     let destFiles = await getFiles(destFolder)
     console.log(originFiles)
     console.log(destFiles)
-    swapSubs(originFiles, destFiles)
+    swapSubs(originFiles, destFiles, outputFolder)
 }
 
 /**
@@ -124,9 +125,10 @@ async function getFiles(dir) {
  * Transpasa los subtitulos de un archivo a otro siguiendo el orten de la lista
  * @param   {Array}    originFiles  Lista de archivos origen con los subtitulos que se quieren copiar
  * @param   {Array}    destFiles    Lista de archivos destino a los que se les quieren copiar los subtitulos
+ * @param   {string}   outputFolder Carpeta de salida donde se guardarán los archivos modificados
  * @returns {Boolean}   Resultado de la ejecucion
  */
-async function swapSubs(originFiles, destFiles) {
+async function swapSubs(originFiles, destFiles, outputFolder) {
     if (originFiles.length !== destFiles.length) {
         console.error("La cantidad de archivos origen y destino no coincide");
         return false;
@@ -140,7 +142,7 @@ async function swapSubs(originFiles, destFiles) {
             const originFile = originFiles[i];
             const destFile   = destFiles[i];
 
-            console.log(`\nProcesando:\nOrigen: ${originFile}\nDestino: ${destFile}\n`);
+            console.log(`\nProcesando:\nOrigen: ${originFile}\nDestino: ${destFile}\nOutput: ${outputFolder}\n`);
 
             // Obtener info del origen
             const { stdout: originJson } = await promiseExec(
@@ -215,7 +217,8 @@ async function swapSubs(originFiles, destFiles) {
             await promiseExec(command, { maxBuffer: 1024 * 1024 * 10 });
 
             // Reemplazar archivo original
-            await promiseExec(`mv "${tempFile}" "${destFile}"`);
+            console.log(`Moviendo: "${tempFile}" a "${outputFolder}/${destFile.split('/').pop()}"`);
+            await promiseExec(`mv "${tempFile}" "${outputFolder}/${destFile.split('/').pop()}"`);
 
             console.log("Subtítulo transferido correctamente");
         }
@@ -240,106 +243,4 @@ function isInvalidPrompt(input, validOptions) {
     }
 
     return false
-}
-
-
-
-
-
-
-
-
-
-
-
-/**
- * Escanea los subtitulos del mkv, marca todos a por defecto 0 excepto spanish
- * @param   {string}    file Comando a ejecutar si no se indica se usa el primero del queue
- * @returns {Boolean}   Resultado de la ejecucion
- */
-function setDefaultSubs(file) {
-    TOTAL_FILES++
-    exec(`mkvmerge -J "${file}"`, {maxBuffer: undefined}, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`error: ${error.message}`)
-            return false
-        }
-
-        if (stderr) {
-            console.error(`stderr: ${stderr}`)
-            return false
-        }
-
-        // let mkvData        = parse(stdout)
-        let subtitleTracks = mkvData.tracks.filter(e => e.type == 'subtitles')
-        let hasCastillian  = subtitleTracks.find(e => e.properties.language_ietf == 'es-ES')
-        let hasSpanish     = subtitleTracks.find(e => e.properties.language == 'spa')
-        
-        if (!subtitleTracks.length) {
-            console.log("Skipped " + file)
-            return false
-        }
-
-        let defaultTrack   = subtitleTracks[0].properties.uid.value;
-        let commands       = []
-        TOTAL_SUBS         += subtitleTracks.length
-        if (IS_TEST) {
-            console.log("Archivos: " + TOTAL_FILES + " Subtitulos: " + TOTAL_SUBS)
-        }
-
-        if (hasSpanish) {
-            defaultTrack = hasSpanish.properties.uid.value
-        }
-
-        if (hasCastillian) {
-            defaultTrack = hasCastillian.properties.uid.value
-        }
-
-        subtitleTracks.forEach(e => {
-            let defaultVal = (defaultTrack == e.properties.uid.value ? 1 : 0)
-            if (IS_TEST) {
-                console.log(`mkvpropedit "${file}" -e track:=${e.properties.uid.value} --set flag-default=${defaultVal}`)
-            }
-            commands.push(`mkvpropedit "${file}" -e track:=${e.properties.uid.value} --set flag-default=${defaultVal}`)
-        })
-
-        if (!IS_TEST) {
-            run(null, commands, file.replace(import.meta.dirname + '/', ''))
-        }
-    });
-}
-
-/**
- * Ejecuta una lista de comandos de forma ordenada y sincrona
- * @param   {string}    command     Comando a ejecutar si no se indica se usa el primero del queue
- * @param   {Array}     queue       Array con los comandos a ejecutar
- * @param   {string}    fileCounter Archivo al que se le va a ejecutar el comando
- * @returns {Boolean}   Resultado de la ejecucion
- */
-function run(command, queue = [], file = null) {
-    if (!command) {
-        if (!queue.length) {
-            console.error("no hay comandos a ejecutar")
-            return false
-        }
-        command = queue.shift()
-    }
-
-    exec(command, {maxBuffer: undefined}, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`error: ${error.message}`)
-            return false
-        }
-        if (stderr) {
-            console.error(`stderr: ${stderr}`)
-            return false
-        }
-
-        console.log("commands left: " + queue.length + (file ? ' del archivo ' + file : ''))
-
-        if (queue.length) {
-            run(queue.shift(), queue, file)
-        }
-    })
-    return true
 }
