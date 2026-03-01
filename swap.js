@@ -144,6 +144,7 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
 
     let keepOtherSubsFlag = null;
     let referenceSubTrack = null;
+    let delayMs = null;
 
     try {
         for (let i = 0; i < originFiles.length; i++) {
@@ -203,6 +204,16 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
                 keepOtherSubsFlag = answer === "y";
             }
 
+            // Preguntar solo una vez por el delay
+            if (delayMs === null) {
+                let answer;
+                do {
+                    answer = await prompt(`Retraso de subtitulos (en milisegundos) (0 para no usar): `);
+                } while (isNaN(answer));
+
+                delayMs = parseInt(answer);
+            }
+
             // Construir comando mkvmerge
             const tempFile = `${destFile}.tmp.mkv`
 
@@ -217,7 +228,11 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
 
             // Del origen: solo el subtítulo seleccionado
             command += `--no-audio --no-video --no-attachments --no-chapters `
-            command += `--subtitle-tracks ${referenceSubTrack.id} --default-track ${referenceSubTrack.id}:yes `
+            command += `--subtitle-tracks ${referenceSubTrack.id} `
+            if (delayMs) {
+                command += `--sync ${referenceSubTrack.id}:${delayMs} `
+            }
+            command += `--default-track ${referenceSubTrack.id}:yes `
             command += `"${originFile}"`
 
             console.log("Ejecutando:", command);
