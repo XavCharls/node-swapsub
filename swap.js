@@ -80,10 +80,11 @@ async function index() {
 
     //crear la carpeta en el destino si no existe
     await promiseExec(`mkdir -p '${outputFolder}'`);
-
     let originFiles = await getFiles(originFolder)
     let destFiles = await getFiles(destFolder)
+    console.log(`${colors.fgBlue}Archivos origen:${colors.reset}`)
     console.log(originFiles)
+    console.log(`${colors.fgBlue}Archivos destino:${colors.reset}`)
     console.log(destFiles)
     swapSubs(originFiles, destFiles, outputFolder)
 }
@@ -136,7 +137,7 @@ async function getFiles(dir) {
  */
 async function swapSubs(originFiles, destFiles, outputFolder) {
     if (originFiles.length !== destFiles.length) {
-        console.error("La cantidad de archivos origen y destino no coincide");
+        console.log(`${colors.bgRed}${colors.fgWhite}${colors.bright} La cantidad de archivos origen y destino no coincide ${colors.reset}`)
         rl.close()
         return false;
     }
@@ -146,10 +147,10 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
 
     try {
         for (let i = 0; i < originFiles.length; i++) {
-            const originFile = originFiles[i].replaceAll(/(?<!\\)"/g, '\\"');
-            const destFile   = destFiles[i].replaceAll(/(?<!\\)"/g, '\\"');
+            const originFile = originFiles[i];
+            const destFile   = destFiles[i];
 
-            console.log(`\nProcesando:\nOrigen: ${originFile}\nDestino: ${destFile}\nOutput: ${outputFolder}\n`);
+            console.log(`${colors.fgBlue}\nProcesando:\nOrigen: ${originFile}\nDestino: ${destFile}\nOutput: ${outputFolder}\n${colors.reset}`);
 
             // Obtener info del origen
             const { stdout: originJson } = await promiseExec(
@@ -161,21 +162,21 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
             const subtitleTracks = originData.tracks.filter(t => t.type === "subtitles");
 
             if (!subtitleTracks.length) {
-                console.log("No hay subtítulos en el archivo origen. Saltando...");
+                console.log(`${colors.bgYellow}${colors.fgBlack}${colors.bright} No hay subtítulos en el archivo origen. Saltando... ${colors.reset}`);
                 continue;
             }
 
             // Mostrar opciones solo la primera vez
             if (!referenceSubTrack) {
+                console.log(`${colors.fgMagenta}Id${colors.reset} | ${colors.fgYellow}Idioma${colors.reset} | ${colors.fgYellow}Idioma IETF${colors.reset} | ${colors.fgYellow}Nombre pista${colors.reset}`);
                 const options = subtitleTracks.map(t =>
-                    `${t.id}: ${t.properties.language || "und"} (${t.properties.language_ietf || "N/A"}) (${t.properties.track_name || "N/A"})`
+                    `${colors.fgMagenta}${t.id}${colors.reset} | ${colors.fgYellow}${t.properties.language || "und"}${colors.reset} | ${colors.fgYellow}${t.properties.language_ietf || "N/A"}${colors.reset} | ${colors.fgYellow}${t.properties.track_name || "N/A"}${colors.reset}`
                 ).join("\n");
 
                 let selectedId;
                 do {
-                    selectedId = await prompt(`${options}\nElige ID del subtítulo a transferir: `);
+                    selectedId = await prompt(`${options}\nElige ID del subtítulo a transferir: ${colors.fgMagenta}`);
                 } while (!subtitleTracks.some(t => String(t.id) === selectedId));
-
                 referenceSubTrack = subtitleTracks.find(t => String(t.id) === selectedId);
             } else {
                 // Buscar mismo idioma en siguientes archivos
@@ -185,7 +186,7 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
                 );
 
                 if (!match) {
-                    console.log("No se encontró subtítulo equivalente en este archivo. Saltando...");
+                    console.log(`${colors.bgYellow}${colors.fgBlack}${colors.bright} No se encontró subtítulo equivalente en este archivo. Saltando... ${colors.reset}`);
                     continue;
                 }
 
@@ -196,7 +197,7 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
             if (keepOtherSubsFlag === null) {
                 let answer;
                 do {
-                    answer = await prompt("¿Mantener otros subtítulos del destino? (y/n): ");
+                    answer = await prompt(`${colors.reset}¿Mantener otros subtítulos del destino? (y/n): `);
                 } while (!["y", "n"].includes(answer));
 
                 keepOtherSubsFlag = answer === "y";
@@ -227,16 +228,16 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
             console.log(`Moviendo: "${tempFile}" a "${outputFolder}/${destFile.split('/').pop()}"`);
             await promiseExec(`mv "${tempFile}" "${outputFolder}/${destFile.split('/').pop()}"`);
 
-            console.log("Subtítulo transferido correctamente");
+            console.log(`${colors.bgGreen}${colors.fgBlack}${colors.bright} Subtítulo transferido correctamente ${colors.reset}`);
         }
 
         rl.close();
         return true;
 
     } catch (error) {
-        console.error("STDERR:");
-        console.error(error.stderr?.toString());
-        console.error("ERROR:");
+        console.error(`${colors.bgRed}${colors.fgWhite}${colors.bright} STDERR: ${colors.reset}`)
+        console.error(error.stderr.toString());
+        console.error(`${colors.bgRed}${colors.fgWhite}${colors.bright} ERROR: ${colors.reset}`)
         console.error(error.message);
         rl.close();
         return false;
