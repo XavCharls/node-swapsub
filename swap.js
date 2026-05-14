@@ -325,7 +325,7 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
             console.log(`Moviendo: "${tempFile}" a "${outputFolder}/${destFile.split('/').pop()}"`);
             await promiseExec(`mv "${tempFile}" "${outputFolder}/${destFile.split('/').pop()}"`);
 
-            console.log(`${colors.bgGreen}${colors.fgBlack}${colors.bright} Subtítulo transferido correctamente ${colors.reset}`);
+            console.log(`${colors.bgGreen}${colors.fgBlack}${colors.bright} Subtítulo${audioFlag ? ' y audio' : ''} transferido${audioFlag ? 's' : ''} correctamente ${colors.reset}`);
         }
 
         rl.close();
