@@ -145,8 +145,11 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
     }
 
     let keepOtherSubsFlag = null;
+    let audioFlag = null;
     let referenceSubTrack = null;
+    let referenceAudioTrack = null;
     let delayMs = null;
+    let audioDelayMs = null;
 
     try {
         for (let i = 0; i < originFiles.length; i++) {
@@ -163,10 +166,6 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
 
             const originData = parse(originJson);
             const subtitleTracks = originData.tracks.filter(t => t.type === "subtitles");
-
-            //TODO poner tambien que se puedan pasar audios
-            // const audioTracks = originData.tracks.filter(t => t.type === "audio");
-
 
             if (!subtitleTracks.length) {
                 console.log(`${colors.bgYellow}${colors.fgBlack}${colors.bright} No hay subtítulos en el archivo origen. Saltando... ${colors.reset}`);
@@ -222,6 +221,63 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
                 delayMs = parseInt(answer);
             }
 
+            // Preguntar solo una vez si mantener otros subtítulos
+            if (audioFlag === null) {
+                let answer;
+                do {
+                    answer = await prompt(`${colors.reset}¿Pasar tambien audio? (y/n): `);
+                } while (!["y", "n"].includes(answer));
+
+                audioFlag = answer === "y";
+            }
+
+            if (audioFlag) {
+                const audioTracks = originData.tracks.filter(t => t.type === "audio");
+
+                if (!audioTracks.length) {
+                    console.log(`${colors.bgYellow}${colors.fgBlack}${colors.bright} No hay audio en el archivo origen. Saltando... ${colors.reset}`);
+                    continue;
+                }
+
+                // Mostrar opciones solo la primera vez
+                if (!referenceAudioTrack) {
+                    console.log(`${colors.fgMagenta}Id${colors.reset} | ${colors.fgYellow}Idioma${colors.reset} | ${colors.fgYellow}Idioma IETF${colors.reset} | ${colors.fgYellow}Nombre pista${colors.reset}`);
+                    const options = audioTracks.map(t =>
+                        `${colors.fgMagenta}${t.id}${colors.reset} | ${colors.fgYellow}${t.properties.language || "und"}${colors.reset} | ${colors.fgYellow}${t.properties.language_ietf || "N/A"}${colors.reset} | ${colors.fgYellow}${t.properties.track_name || "N/A"}${colors.reset}`
+                    ).join("\n");
+
+                    let selectedId;
+                    do {
+                        selectedId = await prompt(`${options}\nElige ID del audio a transferir: ${colors.fgMagenta}`);
+                    } while (!audioTracks.some(t => String(t.id) === selectedId));
+                    referenceAudioTrack = audioTracks.find(t => String(t.id) === selectedId);
+                } else {
+                    // Buscar mismo idioma en siguientes archivos
+                    const match = audioTracks.find(t =>
+                        t.properties.language === referenceAudioTrack.properties.language &&
+                        t.properties.language_ietf === referenceAudioTrack.properties.language_ietf &&
+                        t.properties.track_name === referenceAudioTrack.properties.track_name
+                    );
+
+                    if (!match) {
+                        console.log(`${colors.bgYellow}${colors.fgBlack}${colors.bright} No se encontró audio equivalente en este archivo. Saltando... ${colors.reset}`);
+                        continue;
+                    }
+
+                    referenceAudioTrack = match;
+                }
+
+                if (audioDelayMs === null) {
+                    let answer;
+                    do {
+                        answer = await prompt(`${colors.reset}Retraso de audio (en milisegundos) (0 para no usar): `);
+                    } while (isNaN(answer));
+    
+                    audioDelayMs = parseInt(answer);
+                }
+            }
+
+
             // Construir comando mkvmerge
             const tempFile = `${destFile}.tmp.mkv`
 
@@ -234,8 +290,13 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
 
             command += `"${destFile}" `
 
-            // Del origen: solo el subtítulo seleccionado
-            command += `--no-audio --no-video --no-attachments --no-chapters `
+            if (audioFlag) {
+                command += `--audio-tracks ${referenceAudioTrack.id} ${audioDelayMs ? `--sync ${referenceAudioTrack.id}:${audioDelayMs} ` : ''}--no-video --no-attachments --no-chapters `
+            } else {
+                // Del origen: solo el subtítulo seleccionado
+                command += `--no-audio --no-video --no-attachments --no-chapters `
+            }
+
             command += `--subtitle-tracks ${referenceSubTrack.id} `
             if (delayMs) {
                 command += `--sync ${referenceSubTrack.id}:${delayMs} `
