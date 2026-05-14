@@ -2,6 +2,7 @@
 // const { exec } = import("child_process");
 import { exec } from 'child_process'
 import { parse, stringify } from 'lossless-json'
+import Table from 'cli-table3';
 
 import { promisify } from 'util';
 import { resolve } from 'path';
@@ -174,14 +175,20 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
 
             // Mostrar opciones solo la primera vez
             if (!referenceSubTrack) {
-                console.log(`${colors.fgMagenta}Id${colors.reset} | ${colors.fgYellow}Idioma${colors.reset} | ${colors.fgYellow}Idioma IETF${colors.reset} | ${colors.fgYellow}Nombre pista${colors.reset}`);
-                const options = subtitleTracks.map(t =>
-                    `${colors.fgMagenta}${t.id}${colors.reset} | ${colors.fgYellow}${t.properties.language || "und"}${colors.reset} | ${colors.fgYellow}${t.properties.language_ietf || "N/A"}${colors.reset} | ${colors.fgYellow}${t.properties.track_name || "N/A"}${colors.reset}`
-                ).join("\n");
+                let subOptions = new Table({
+                    head: [`${colors.fgMagenta}Id${colors.reset}`,`${colors.fgYellow}Idioma${colors.reset}`,`${colors.fgYellow}Idioma IETF${colors.reset}`, `${colors.fgYellow}Nombre pista${colors.reset}`],
+                    // colWidths: [10, 20, 20, 40]
+                });
+
+                subtitleTracks.forEach(t => {
+                    subOptions.push([`${colors.fgMagenta}${t.id}${colors.reset}`, `${colors.fgYellow}${t.properties.language || "und"}${colors.reset}`, `${colors.fgYellow}${t.properties.language_ietf || "N/A"}${colors.reset}`, `${colors.fgYellow}${t.properties.track_name || "N/A"}${colors.reset}`])
+                });
+
+                console.log(subOptions.toString());
 
                 let selectedId;
                 do {
-                    selectedId = await prompt(`${options}\nElige ID del subtítulo a transferir: ${colors.fgMagenta}`);
+                    selectedId = await prompt(`${selectedId ? `${colors.fgRed}Id invalido${colors.reset} ` : ''}${colors.reset}Elige ID del subtítulo a transferir: ${colors.fgMagenta}`);
                 } while (!subtitleTracks.some(t => String(t.id) === selectedId));
                 referenceSubTrack = subtitleTracks.find(t => String(t.id) === selectedId);
             } else {
@@ -241,14 +248,20 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
 
                 // Mostrar opciones solo la primera vez
                 if (!referenceAudioTrack) {
-                    console.log(`${colors.fgMagenta}Id${colors.reset} | ${colors.fgYellow}Idioma${colors.reset} | ${colors.fgYellow}Idioma IETF${colors.reset} | ${colors.fgYellow}Nombre pista${colors.reset}`);
-                    const options = audioTracks.map(t =>
-                        `${colors.fgMagenta}${t.id}${colors.reset} | ${colors.fgYellow}${t.properties.language || "und"}${colors.reset} | ${colors.fgYellow}${t.properties.language_ietf || "N/A"}${colors.reset} | ${colors.fgYellow}${t.properties.track_name || "N/A"}${colors.reset}`
-                    ).join("\n");
+                    let audioOptions = new Table({
+                        head: [`${colors.fgMagenta}Id${colors.reset}`,`${colors.fgYellow}Idioma${colors.reset}`,`${colors.fgYellow}Idioma IETF${colors.reset}`, `${colors.fgYellow}Nombre pista${colors.reset}`],
+                        // colWidths: [10, 20, 20, 40]
+                    });
+
+                    audioTracks.forEach(t => {
+                        audioOptions.push([`${colors.fgMagenta}${t.id}${colors.reset}`, `${colors.fgYellow}${t.properties.language || "und"}${colors.reset}`, `${colors.fgYellow}${t.properties.language_ietf || "N/A"}${colors.reset}`, `${colors.fgYellow}${t.properties.track_name || "N/A"}${colors.reset}`])
+                    });
+
+                    console.log(audioOptions.toString());
 
                     let selectedId;
                     do {
-                        selectedId = await prompt(`${options}\nElige ID del audio a transferir: ${colors.fgMagenta}`);
+                        selectedId = await prompt(`${selectedId ? `${colors.fgRed}Id invalido${colors.reset} ` : ''}${colors.reset}Elige ID del audio a transferir: ${colors.fgMagenta}`);
                     } while (!audioTracks.some(t => String(t.id) === selectedId));
                     referenceAudioTrack = audioTracks.find(t => String(t.id) === selectedId);
                 } else {
