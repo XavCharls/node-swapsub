@@ -80,6 +80,8 @@ async function index() {
 
     //crear la carpeta en el destino si no existe
     await promiseExec(`mkdir -p '${outputFolder}'`);
+    await promiseExec(`rm -f '${originFolder}'/*.tmp.mkv`);
+    await promiseExec(`rm -f '${destFolder}'/*.tmp.mkv`);
     let originFiles = await getFiles(originFolder)
     let destFiles = await getFiles(destFolder)
     console.log(`${colors.fgBlue}Archivos origen:${colors.reset}`)
@@ -162,6 +164,10 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
             const originData = parse(originJson);
             const subtitleTracks = originData.tracks.filter(t => t.type === "subtitles");
 
+            //TODO poner tambien que se puedan pasar audios
+            // const audioTracks = originData.tracks.filter(t => t.type === "audio");
+
+
             if (!subtitleTracks.length) {
                 console.log(`${colors.bgYellow}${colors.fgBlack}${colors.bright} No hay subtítulos en el archivo origen. Saltando... ${colors.reset}`);
                 continue;
@@ -181,9 +187,11 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
                 referenceSubTrack = subtitleTracks.find(t => String(t.id) === selectedId);
             } else {
                 // Buscar mismo idioma en siguientes archivos
+                // el language y el ietf pueden ser los dos undefined para todos los idiomas, si hay mas de 1 subtitulo que hace mach mirar otras cosas (tracK_name o preguntar otra vez)
                 const match = subtitleTracks.find(t =>
                     t.properties.language === referenceSubTrack.properties.language &&
-                    t.properties.language_ietf === referenceSubTrack.properties.language_ietf
+                    t.properties.language_ietf === referenceSubTrack.properties.language_ietf &&
+                    t.properties.track_name === referenceSubTrack.properties.track_name
                 );
 
                 if (!match) {
