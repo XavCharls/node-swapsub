@@ -146,6 +146,7 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
     }
 
     let keepOtherSubsFlag = null;
+    let subFlag = null;
     let audioFlag = null;
     let referenceSubTrack = null;
     let referenceAudioTrack = null;
@@ -174,7 +175,7 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
             }
 
             // Mostrar opciones solo la primera vez
-            if (!referenceSubTrack) {
+            if (!referenceSubTrack && subFlag === null) {
                 let subOptions = new Table({
                     head: [`${colors.fgMagenta}Id${colors.reset}`,`${colors.fgYellow}Idioma${colors.reset}`,`${colors.fgYellow}Idioma IETF${colors.reset}`, `${colors.fgYellow}Nombre pista${colors.reset}`],
                     // colWidths: [10, 20, 20, 40]
@@ -188,10 +189,15 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
 
                 let selectedId;
                 do {
-                    selectedId = await prompt(`${selectedId ? `${colors.fgRed}Id invalido${colors.reset} ` : ''}${colors.reset}Elige ID del subtítulo a transferir: ${colors.fgMagenta}`);
-                } while (!subtitleTracks.some(t => String(t.id) === selectedId));
-                referenceSubTrack = subtitleTracks.find(t => String(t.id) === selectedId);
-            } else {
+                    selectedId = await prompt(`${selectedId ? `${colors.fgRed}Id invalido${colors.reset} ` : ''}${colors.reset}Elige ID del subtítulo a transferir (n para saltar): ${colors.fgMagenta}`);
+                } while (!subtitleTracks.some(t => String(t.id) === selectedId) && selectedId !== 'n');
+                if (selectedId === 'n') {
+                    subFlag = false;
+                } else {
+                    referenceSubTrack = subtitleTracks.find(t => String(t.id) === selectedId);
+                    subFlag = true;
+                }
+            } else if (subFlag) {
                 // Buscar mismo idioma en siguientes archivos
                 // el language y el ietf pueden ser los dos undefined para todos los idiomas, si hay mas de 1 subtitulo que hace mach mirar otras cosas (tracK_name o preguntar otra vez)
                 const match = subtitleTracks.find(t =>
@@ -220,12 +226,16 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
 
             // Preguntar solo una vez por el delay
             if (delayMs === null) {
-                let answer;
-                do {
-                    answer = await prompt(`Retraso de subtitulos (en milisegundos) (0 para no usar): `);
-                } while (isNaN(answer));
-
-                delayMs = parseInt(answer);
+                if (subFlag) {
+                    let answer;
+                    do {
+                        answer = await prompt(`Retraso de subtitulos (en milisegundos) (0 para no usar): `);
+                    } while (isNaN(answer));
+    
+                    delayMs = parseInt(answer);
+                } else {
+                    delayMs = 0;
+                }
             }
 
             // Preguntar solo una vez si mantener otros subtítulos
@@ -310,11 +320,15 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
                 command += `--no-audio --no-video --no-attachments --no-chapters `
             }
 
-            command += `--subtitle-tracks ${referenceSubTrack.id} `
-            if (delayMs) {
-                command += `--sync ${referenceSubTrack.id}:${delayMs} `
+            if (subFlag) {
+                command += `--subtitle-tracks ${referenceSubTrack.id} `
+                if (delayMs) {
+                    command += `--sync ${referenceSubTrack.id}:${delayMs} `
+                }
+                command += `--default-track ${referenceSubTrack.id}:yes `
+            } else {
+                command += `--no-subtitles `
             }
-            command += `--default-track ${referenceSubTrack.id}:yes `
             command += `"${originFile}"`
 
             console.log("Ejecutando:", command);
