@@ -168,8 +168,9 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
 
             const originData = parse(originJson);
             const subtitleTracks = originData.tracks.filter(t => t.type === "subtitles");
+            const audioTracks = originData.tracks.filter(t => t.type === "audio");
 
-            if (!subtitleTracks.length) {
+            if (!subtitleTracks.length && !audioTracks.length) {
                 console.log(`${colors.bgYellow}${colors.fgBlack}${colors.bright} No hay subtítulos en el archivo origen. Saltando... ${colors.reset}`);
                 continue;
             }
@@ -249,8 +250,6 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
             }
 
             if (audioFlag) {
-                const audioTracks = originData.tracks.filter(t => t.type === "audio");
-
                 if (!audioTracks.length) {
                     console.log(`${colors.bgYellow}${colors.fgBlack}${colors.bright} No hay audio en el archivo origen. Saltando... ${colors.reset}`);
                     continue;
@@ -315,6 +314,8 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
 
             if (audioFlag) {
                 command += `--audio-tracks ${referenceAudioTrack.id} ${audioDelayMs ? `--sync ${referenceAudioTrack.id}:${audioDelayMs} ` : ''}--no-video --no-attachments --no-chapters `
+                command += `--default-track ${referenceAudioTrack.id}:yes `
+
             } else {
                 // Del origen: solo el subtítulo seleccionado
                 command += `--no-audio --no-video --no-attachments --no-chapters `
