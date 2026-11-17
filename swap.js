@@ -148,8 +148,8 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
     let keepOtherSubsFlag = null;
     let subFlag = null;
     let audioFlag = null;
-    let referenceSubTrack = null;
-    let referenceAudioTrack = null;
+    let referenceSubTracks = null;
+    let referenceAudioTracks = null;
     let delayMs = null;
     let audioDelayMs = null;
 
@@ -176,10 +176,9 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
             }
 
             // Mostrar opciones solo la primera vez
-            if (!referenceSubTrack && subFlag === null) {
+            if (subFlag === null) {
                 let subOptions = new Table({
-                    head: [`${colors.fgMagenta}Id${colors.reset}`,`${colors.fgYellow}Idioma${colors.reset}`,`${colors.fgYellow}Idioma IETF${colors.reset}`, `${colors.fgYellow}Nombre pista${colors.reset}`],
-                    // colWidths: [10, 20, 20, 40]
+                    head: [`${colors.fgMagenta}Id${colors.reset}`,`${colors.fgYellow}Idioma${colors.reset}`,`${colors.fgYellow}Idioma IETF${colors.reset}`, `${colors.fgYellow}Nombre pista${colors.reset}`]
                 });
 
                 subtitleTracks.forEach(t => {
@@ -188,31 +187,43 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
 
                 console.log(subOptions.toString());
 
-                let selectedId;
+                let selectedIds;
                 do {
-                    selectedId = await prompt(`${selectedId ? `${colors.fgRed}Id invalido${colors.reset} ` : ''}${colors.reset}Elige ID del subtítulo a transferir (n para saltar): ${colors.fgMagenta}`);
-                } while (!subtitleTracks.some(t => String(t.id) === selectedId) && selectedId !== 'n');
-                if (selectedId === 'n') {
+                    selectedIds = await prompt(`${selectedIds ? `${colors.fgRed}Id(s) invalido(s)${colors.reset} ` : ''}${colors.reset}Elige ID(s) del subtítulo a transferir, separados por comas (n para saltar): ${colors.fgMagenta}`);
+                    selectedIds = selectedIds.trim();
+                    if (selectedIds === 'n') {
+                        break;
+                    }
+                    const ids = selectedIds.split(',').map(id => id.trim()).filter(Boolean);
+                    if (ids.length && ids.every(id => subtitleTracks.some(t => String(t.id) === id))){
+                        break;
+                    }
+                } while (true);
+
+                if (selectedIds === 'n') {
                     subFlag = false;
                 } else {
-                    referenceSubTrack = subtitleTracks.find(t => String(t.id) === selectedId);
+                    referenceSubTracks = selectedIds.split(',')
+                        .map(id => id.trim())
+                        .filter(Boolean)
+                        .map(id => subtitleTracks.find(t => String(t.id) === id));
                     subFlag = true;
                 }
             } else if (subFlag) {
-                // Buscar mismo idioma en siguientes archivos
-                // el language y el ietf pueden ser los dos undefined para todos los idiomas, si hay mas de 1 subtitulo que hace mach mirar otras cosas (tracK_name o preguntar otra vez)
-                const match = subtitleTracks.find(t =>
-                    t.properties.language === referenceSubTrack.properties.language &&
-                    t.properties.language_ietf === referenceSubTrack.properties.language_ietf &&
-                    t.properties.track_name === referenceSubTrack.properties.track_name
-                );
+                const matches = referenceSubTracks
+                    .map(ref => subtitleTracks.find(t =>
+                        t.properties.language === ref.properties.language &&
+                        t.properties.language_ietf === ref.properties.language_ietf &&
+                        t.properties.track_name === ref.properties.track_name
+                    ))
+                    .filter(Boolean);
 
-                if (!match) {
-                    console.log(`${colors.bgYellow}${colors.fgBlack}${colors.bright} No se encontró subtítulo equivalente en este archivo. Saltando... ${colors.reset}`);
+                if (!matches.length) {
+                    console.log(`${colors.bgYellow}${colors.fgBlack}${colors.bright} No se encontraron subtítulos equivalentes en este archivo. Saltando... ${colors.reset}`);
                     continue;
                 }
 
-                referenceSubTrack = match;
+                referenceSubTracks = matches;
             }
 
             // Preguntar solo una vez si mantener otros subtítulos
@@ -256,10 +267,9 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
                 }
 
                 // Mostrar opciones solo la primera vez
-                if (!referenceAudioTrack) {
+                if (!referenceAudioTracks) {
                     let audioOptions = new Table({
-                        head: [`${colors.fgMagenta}Id${colors.reset}`,`${colors.fgYellow}Idioma${colors.reset}`,`${colors.fgYellow}Idioma IETF${colors.reset}`, `${colors.fgYellow}Nombre pista${colors.reset}`],
-                        // colWidths: [10, 20, 20, 40]
+                        head: [`${colors.fgMagenta}Id${colors.reset}`,`${colors.fgYellow}Idioma${colors.reset}`,`${colors.fgYellow}Idioma IETF${colors.reset}`, `${colors.fgYellow}Nombre pista${colors.reset}`]
                     });
 
                     audioTracks.forEach(t => {
@@ -268,25 +278,35 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
 
                     console.log(audioOptions.toString());
 
-                    let selectedId;
+                    let selectedIds;
                     do {
-                        selectedId = await prompt(`${selectedId ? `${colors.fgRed}Id invalido${colors.reset} ` : ''}${colors.reset}Elige ID del audio a transferir: ${colors.fgMagenta}`);
-                    } while (!audioTracks.some(t => String(t.id) === selectedId));
-                    referenceAudioTrack = audioTracks.find(t => String(t.id) === selectedId);
-                } else {
-                    // Buscar mismo idioma en siguientes archivos
-                    const match = audioTracks.find(t =>
-                        t.properties.language === referenceAudioTrack.properties.language &&
-                        t.properties.language_ietf === referenceAudioTrack.properties.language_ietf &&
-                        t.properties.track_name === referenceAudioTrack.properties.track_name
-                    );
+                        selectedIds = await prompt(`${selectedIds ? `${colors.fgRed}Id(s) invalido(s)${colors.reset} ` : ''}${colors.reset}Elige ID(s) del audio a transferir, separados por comas: ${colors.fgMagenta}`);
+                        selectedIds = selectedIds.trim();
+                        const ids = selectedIds.split(',').map(id => id.trim()).filter(Boolean);
+                        if (ids.length && ids.every(id => audioTracks.some(t => String(t.id) === id))){ 
+                            break;
+                        }
+                    } while (true);
 
-                    if (!match) {
-                        console.log(`${colors.bgYellow}${colors.fgBlack}${colors.bright} No se encontró audio equivalente en este archivo. Saltando... ${colors.reset}`);
+                    referenceAudioTracks = selectedIds.split(',')
+                        .map(id => id.trim())
+                        .filter(Boolean)
+                        .map(id => audioTracks.find(t => String(t.id) === id));
+                } else {
+                    const matches = referenceAudioTracks
+                        .map(ref => audioTracks.find(t =>
+                            t.properties.language === ref.properties.language &&
+                            t.properties.language_ietf === ref.properties.language_ietf &&
+                            t.properties.track_name === ref.properties.track_name
+                        ))
+                        .filter(Boolean);
+
+                    if (!matches.length) {
+                        console.log(`${colors.bgYellow}${colors.fgBlack}${colors.bright} No se encontraron pistas de audio equivalentes en este archivo. Saltando... ${colors.reset}`);
                         continue;
                     }
 
-                    referenceAudioTrack = match;
+                    referenceAudioTracks = matches;
                 }
 
                 if (audioDelayMs === null) {
@@ -313,22 +333,36 @@ async function swapSubs(originFiles, destFiles, outputFolder) {
             command += `"${destFile}" `
 
             if (audioFlag) {
-                command += `--audio-tracks ${referenceAudioTrack.id} ${audioDelayMs ? `--sync ${referenceAudioTrack.id}:${audioDelayMs} ` : ''}--no-video --no-attachments --no-chapters `
-                command += `--default-track ${referenceAudioTrack.id}:yes `
+                const audioIds = referenceAudioTracks.map(t => t.id);
+                command += `--audio-tracks ${audioIds.join(',')} `;
+                if (audioDelayMs) {
+                    audioIds.forEach(id => {
+                        command += `--sync ${id}:${audioDelayMs} `;
+                    });
+                }
+                command += `--no-video --no-attachments --no-chapters `;
+                referenceAudioTracks.forEach((track, index) => {
+                    command += `--default-track ${track.id}:${index === 0 ? 'yes' : 'no'} `;
+                });
 
             } else {
-                // Del origen: solo el subtítulo seleccionado
-                command += `--no-audio --no-video --no-attachments --no-chapters `
+                // Del origen: solo los subtítulos seleccionados
+                command += `--no-audio --no-video --no-attachments --no-chapters `;
             }
 
             if (subFlag) {
-                command += `--subtitle-tracks ${referenceSubTrack.id} `
+                const subtitleIds = referenceSubTracks.map(t => t.id);
+                command += `--subtitle-tracks ${subtitleIds.join(',')} `;
                 if (delayMs) {
-                    command += `--sync ${referenceSubTrack.id}:${delayMs} `
+                    subtitleIds.forEach(id => {
+                        command += `--sync ${id}:${delayMs} `;
+                    });
                 }
-                command += `--default-track ${referenceSubTrack.id}:yes `
+                referenceSubTracks.forEach((track, index) => {
+                    command += `--default-track ${track.id}:${index === 0 ? 'yes' : 'no'} `;
+                });
             } else {
-                command += `--no-subtitles `
+                command += `--no-subtitles `;
             }
             command += `"${originFile}"`
 
